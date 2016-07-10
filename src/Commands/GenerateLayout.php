@@ -106,12 +106,59 @@ class GenerateLayout extends Command
             if(is_dir($args['template'] . "/" . $file)){
                 $Array['AssetFolders'][] = $file;
                 unset($files[$key]);
+                continue;
+            }
+
+            if(!strpos($file,".html")){
+                $Array['AssetFolders'][] = $file;
+                unset($files[$key]);
+                continue;
+            }
+
+            if(is_dir($args['template'] . "/" . $file)){
+                $Array['AssetFolders'][] = $file;
+                unset($files[$key]);
+                continue;
             }
 
             if(!file_exists($args['template'] . "/" . $file)){
                 unset($files[$key]);
+                continue;
             }
         }
+
+        // If not asset folders were found, check one level up
+        $parentDirFiles = scandir($args['template']."/../");
+
+        if(count($parentDirFiles) > 4 && count($parentDirFiles) < 10){
+            foreach($parentDirFiles as $key=>$file){
+
+                if($file=="."||$file==".."){
+                    unset($parentDirFiles[$key]);
+                    continue;
+                }
+                
+                if($args['template'] . "/../" . $file == $args['template']){
+                    unset($parentDirFiles[$key]);
+                    continue;
+                }
+
+                if(basename($args['template']) == $file){
+                    unset($parentDirFiles[$key]);
+                    continue;   
+                }
+
+                if(is_dir($args['template'] . "/../" . $file)){
+                    $Array['AssetFolders'][] = "../" . $file;
+                    unset($parentDirFiles[$key]);
+                }
+
+                if(!file_exists($args['template'] . "/../" . $file)){
+                    unset($parentDirFiles[$key]);
+                }
+            }
+        }
+
         $files = array_unique($files);
 
         // Loop over the files in the dir
@@ -307,7 +354,7 @@ class GenerateLayout extends Command
 
         // Copy assets folders
             foreach($Array['AssetFolders'] as $folder){
-                $this->movedir($args['template'] . "/$folder", public_path() . "/" . $func_arg['layoutname'] . "/$folder");
+                $this->movedir($args['template'] . "/$folder", public_path() . "/" . $func_arg['layoutname'] . "/" . str_replace(["..", "/"], "", $folder));
             }
             
         // Get file names
@@ -352,7 +399,6 @@ class GenerateLayout extends Command
                     
                     $href_pattern = '/<link(.+)href="(.*)"/';
                     preg_match($href_pattern, $meta, $match);
-                    
                     foreach ($Array['AssetFolders'] as $folder) {
                         if(isset($match[count($match)-1]) && !(strpos(">".$match[count($match)-1], $folder."/")===false)){
                             $st1 = strpos($meta, "href") + 6;
@@ -568,17 +614,27 @@ class GenerateLayout extends Command
     }
 
     private function movedir($source, $destination){
-
-        if(!is_dir($destination)){
-            mkdir($destination);
+        
+        if(strpos(basename($source), ".")===0){
+            return true;
         }
+    
 
-        $i = new \DirectoryIterator($source);
-        foreach($i as $f){
-            if($f->isFile()){
-                copy($f->getRealPath(), "$destination/" . $f->getFilename());
-            }elseif(!$f->isDot() && $f->isDir()){
-                $this->movedir($f->getRealPath(), "$destination/$f");
+        if(is_dir($source)){
+            if(!file_exists($destination)){
+                mkdir($destination);
+            }
+            $i = new \DirectoryIterator($source);
+            foreach($i as $f){
+                if($f->isFile()){
+                    copy($f->getRealPath(), "$destination/" . $f->getFilename());
+                }elseif(!$f->isDot() && $f->isDir()){
+                    $this->movedir($f->getRealPath(), "$destination/$f");
+                }
+            }
+        }else{
+            if(strpos(basename($source), ".")!==0){
+                copy($source, $destination);
             }
         }
     }
